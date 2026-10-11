@@ -11,7 +11,8 @@ import (
 )
 
 // HBaseStorage HBase存储实现
-// HBase 支持 checkAndPut 原子操作，可以实现真正的CAS
+// HBase 虽支持 checkAndPut 原子操作，但本实现尚未接入真实 HBase 服务端，
+// 仅作为非 CAS 存储的占位实现，不可用于分布式锁。真正接入时需用 checkAndPut 实现 CAS。
 type HBaseStorage struct {
 	mu sync.RWMutex
 }
@@ -30,9 +31,13 @@ func (x *HBaseStorage) GetName() string {
 
 func (x *HBaseStorage) Capabilities() []storage.StorageCapability {
 	return []storage.StorageCapability{
-		storage.CapabilityCAS,
 		storage.CapabilityReliableTime,
+		storage.CapabilityWatch,
 	}
+}
+
+func (x *HBaseStorage) Watch(ctx context.Context, lockId string) (<-chan *storage.LockInformation, error) {
+	return storage.NewPollingLockWatcher(x, 500*time.Millisecond).Watch(ctx, lockId)
 }
 
 func (x *HBaseStorage) Init(ctx context.Context) error {
@@ -42,20 +47,19 @@ func (x *HBaseStorage) Init(ctx context.Context) error {
 func (x *HBaseStorage) CreateWithVersion(ctx context.Context, lockId string, version storage.Version, lockInformation *storage.LockInformation) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
-	// HBase checkAndPut 实现
-	return nil
+	return storage_lock.ErrStorageCapabilityMissing
 }
 
 func (x *HBaseStorage) UpdateWithVersion(ctx context.Context, lockId string, expectedVersion, newVersion storage.Version, lockInformation *storage.LockInformation) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
-	return nil
+	return storage_lock.ErrStorageCapabilityMissing
 }
 
 func (x *HBaseStorage) DeleteWithVersion(ctx context.Context, lockId string, expectedVersion storage.Version, lockInformation *storage.LockInformation) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
-	return nil
+	return storage_lock.ErrStorageCapabilityMissing
 }
 
 func (x *HBaseStorage) Get(ctx context.Context, lockId string) (string, error) {
@@ -73,5 +77,5 @@ func (x *HBaseStorage) Close(ctx context.Context) error {
 }
 
 func (x *HBaseStorage) List(ctx context.Context) (go_iterator.Iterator[*storage.LockInformation], error) {
-	return nil, nil
+	return go_iterator.FromSlice([]*storage.LockInformation{}), nil
 }
